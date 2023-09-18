@@ -15,8 +15,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException,TimeoutException
 import pickle
 def get_new_status_from_external_source(submission,driver):
-    driver.save_screenshot('screenshot.png')
-    time.sleep(5)
     wait = WebDriverWait(driver, 10)
 
     wait.until(EC.visibility_of_element_located((By.ID, 'searchInput')))
@@ -33,19 +31,21 @@ def get_new_status_from_external_source(submission,driver):
         return 'ARRIVED'
     else:
         try:
-            wait = WebDriverWait(driver, 10)
+            wait = WebDriverWait(driver, 20)
 
-            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'bar-purple')))
-
-            element = driver.find_element(By.ID,'order-progress-bar')
-            e2=element.find_element(By.CLASS_NAME,'bar-purple')
-            return e2.text
+            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'order-progress-bar')))
+            ele=driver.find_element(By.XPATH,'//*[@id="order-progress-bar"]/div[1]/div[8]/div[1]')
+            if ele.text=='SHIPPED':
+                return 'SHIPPED'
+            else:
+                element = driver.find_element(By.ID,'order-progress-bar')
+                e2=element.find_element(By.CLASS_NAME,'bar-purple')
+                return e2.text
         except TimeoutException:
-            return 'SHIPPED'
+            print('Exception')
     
 def main():
     options=Options()
-    options.add_argument('--headless')
 
     options.add_argument('--no-sandbox')
     options.add_argument('--ignore-certificate-errors-spki-list')
@@ -64,14 +64,12 @@ def main():
             driver.add_cookie(cookie)
     url = "https://www.psacard.com/myaccount/myorders"
     driver.get(url)
-    time.sleep(3)
     db_config = {
         'user': 'root',
         'password': '',
         'host': 'localhost',
         'database': 'psa'
     }
-    driver.save_screenshot('screenshot.png')
     # Connect to the database
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor()
