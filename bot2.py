@@ -14,37 +14,9 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException,TimeoutException
 import pickle
-def get_new_status_from_external_source(submission,driver):
-    wait = WebDriverWait(driver, 10)
-
-    wait.until(EC.visibility_of_element_located((By.ID, 'searchInput')))
-    search_box = driver.find_element(By.ID,"searchInput")  # Replace "q" with the actual attribute value of the search box
-
-    search_box.clear()
-    search_text = str(submission)
-    search_box.send_keys(search_text)
-
-    # Submit the search by pressing the Enter key
-    search_box.send_keys(Keys.RETURN)
-
-    if driver.current_url=='https://www.psacard.com/errors?aspxerrorpath=/myaccount/myorder':
-        return 'ARRIVED'
-    else:
-        try:
-            wait = WebDriverWait(driver, 20)
-
-            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'order-progress-bar')))
-            ele=driver.find_element(By.XPATH,'//*[@id="order-progress-bar"]/div[1]/div[8]/div[1]')
-            if ele.text=='SHIPPED':
-                return 'SHIPPED'
-            else:
-                element = driver.find_element(By.ID,'order-progress-bar')
-                e2=element.find_element(By.CLASS_NAME,'bar-purple')
-                return e2.text
-        except TimeoutException:
-            print('Exception')
     
 def main():
+    
     options=Options()
 
     options.add_argument('--no-sandbox')
@@ -73,23 +45,46 @@ def main():
     # Connect to the database
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor()
-    cursor.execute("SELECT submission, status FROM orders WHERE status != 'SHIPPED'")
+    cursor.execute("SELECT submission, status FROM orders WHERE status != 'Complete'")
     orders = cursor.fetchall()
-
+    new_status=""
     for submission, status in orders:
-        # Simulate getting new status from external source (replace with your logic)
-        new_status = get_new_status_from_external_source(submission,driver)
+        wait = WebDriverWait(driver, 10)
+
+        wait.until(EC.visibility_of_element_located((By.ID, 'search')))
+        search_box = driver.find_element(By.ID,"search")  # Replace "q" with the actual attribute value of the search box
+
+        search_box.clear()
+        search_box.click()
+        search_text = str(submission)
+        search_box.send_keys(search_text)
+        print(submission)
+        # Submit the search by pressing the Enter key
+        search_box.send_keys(Keys.RETURN)
+        wait = WebDriverWait(driver, 20)
+        wait.until(
+            lambda driver: driver.current_url != 'https://www.psacard.com/myaccount/myorders')
+        wait = WebDriverWait(driver, 20)
+        wait.until(EC.visibility_of_element_located((By.XPATH, '/html/body/div[2]/div/div/main')))
+        ele=driver.find_elements(By.TAG_NAME,'ul')
+        a=ele[9].find_elements(By.CLASS_NAME,"text-primary-500")
+        if len(a)<1:
+            ele=driver.find_elements(By.TAG_NAME,'ul')
+            a=ele[9].find_elements(By.CLASS_NAME,"text-neutral2")
+            new_status=a[-1].text
+        else:
+            new_status=a[-1].text
         driver.back()
+        print(new_status)
         if new_status != status:
-            # Update the status in the database
             update_query = "UPDATE orders SET status = %s WHERE submission = %s"
             update_values = (new_status, submission)
             cursor.execute(update_query, update_values)
             connection.commit()
-
-    # Close the cursor and connection
+            
     cursor.close()
     connection.close()
+    driver.close()
 
 if __name__ == '__main__':
     main()
